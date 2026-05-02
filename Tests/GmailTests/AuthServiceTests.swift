@@ -173,24 +173,3 @@ final class TestClock: @unchecked Sendable {
     }
 }
 
-private final class MockAuthorizer: AuthorizationPerforming, @unchecked Sendable {
-    var initialResult: Result<AuthSession, Error> = .failure(NSError(domain: "mock", code: 0))
-    var refreshResult: Result<AuthSession, Error> = .failure(NSError(domain: "mock", code: 0))
-    var revokeError: Error?
-    var refreshCallCount = 0
-    var revokeCallCount = 0
-
-    func performInitialAuthorization() async throws -> AuthSession {
-        try initialResult.get()
-    }
-
-    func performTokenRefresh(refreshToken: String) async throws -> AuthSession {
-        refreshCallCount += 1
-        return try refreshResult.get()
-    }
-
-    func performRevoke(refreshToken: String) async throws {
-        revokeCallCount += 1
-        if let revokeError { throw revokeError }
-    }
-}
