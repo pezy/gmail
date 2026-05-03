@@ -36,7 +36,7 @@ final class NotificationManager: PollingNotifying {
             content.body = message.subject.isEmpty ? "(no subject)" : message.subject
             content.userInfo = [
                 "messageId": message.id,
-                "url": Self.gmailURL(email: email, messageId: message.id).absoluteString
+                "url": Self.gmailURL(email: email, threadId: message.threadId).absoluteString
             ]
             let request = UNNotificationRequest(
                 identifier: message.id,
@@ -47,12 +47,24 @@ final class NotificationManager: PollingNotifying {
         }
     }
 
-    nonisolated static func gmailURL(email: String, messageId: String) -> URL {
+    /// Builds a Gmail web URL that targets a specific thread in the right account.
+    ///
+    /// The path-based form `/mail/u/{email}/` was historically supported but
+    /// regularly fails today with "account temporarily unavailable". The
+    /// reliable disambiguator is the `?authuser={email}` query parameter,
+    /// which Google's own products (Calendar → email) use.
+    ///
+    /// We pass `threadId` because the `#inbox/{id}` fragment opens the
+    /// conversation view, which is keyed on thread, not individual message.
+    nonisolated static func gmailURL(email: String, threadId: String) -> URL {
         var components = URLComponents()
         components.scheme = "https"
         components.host = "mail.google.com"
-        components.path = "/mail/u/\(email)/"
-        components.fragment = "inbox/\(messageId)"
+        components.path = "/mail/"
+        if !email.isEmpty {
+            components.queryItems = [URLQueryItem(name: "authuser", value: email)]
+        }
+        components.fragment = "inbox/\(threadId)"
         return components.url!
     }
 

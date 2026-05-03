@@ -15,11 +15,19 @@ final class NotificationManagerTests: XCTestCase {
         manager = NotificationManager(appState: appState, dispatcher: dispatcher)
     }
 
-    func testGmailURLUsesEmailNotAccountIndex() {
-        let url = NotificationManager.gmailURL(email: "alice@example.com", messageId: "abc123")
+    func testGmailURLUsesAuthuserQueryParamForMultiAccount() {
+        let url = NotificationManager.gmailURL(email: "alice@example.com", threadId: "abc123")
         XCTAssertEqual(
             url.absoluteString,
-            "https://mail.google.com/mail/u/alice@example.com/#inbox/abc123"
+            "https://mail.google.com/mail/?authuser=alice@example.com#inbox/abc123"
+        )
+    }
+
+    func testGmailURLOmitsAuthuserWhenEmailMissing() {
+        let url = NotificationManager.gmailURL(email: "", threadId: "abc123")
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://mail.google.com/mail/#inbox/abc123"
         )
     }
 
@@ -55,7 +63,8 @@ final class NotificationManagerTests: XCTestCase {
         XCTAssertEqual(request.content.userInfo["messageId"] as? String, "m1")
         XCTAssertEqual(
             request.content.userInfo["url"] as? String,
-            "https://mail.google.com/mail/u/alice@example.com/#inbox/m1"
+            "https://mail.google.com/mail/?authuser=alice@example.com#inbox/t-m1",
+            "Notification URL must use authuser query param + threadId for reliable cross-account opening"
         )
     }
 

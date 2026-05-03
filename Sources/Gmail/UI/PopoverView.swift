@@ -58,7 +58,7 @@ struct PopoverView: View {
                 ForEach(appState.emails) { message in
                     MessageRow(message: message, onClick: {
                         if case .signedIn(let email) = appState.authState {
-                            let url = NotificationManager.gmailURL(email: email, messageId: message.id)
+                            let url = NotificationManager.gmailURL(email: email, threadId: message.threadId)
                             NSWorkspace.shared.open(url)
                         }
                     })
