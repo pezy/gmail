@@ -14,6 +14,7 @@ final class AppAuthAuthorizer: AuthorizationPerforming, @unchecked Sendable {
     static let defaultScopes = ["https://www.googleapis.com/auth/gmail.readonly"]
 
     private let clientID: String
+    private let clientSecret: String?
     private let redirectURL: URL
     private let scopes: [String]
     private let urlSession: URLSession
@@ -28,11 +29,13 @@ final class AppAuthAuthorizer: AuthorizationPerforming, @unchecked Sendable {
 
     init(
         clientID: String,
+        clientSecret: String? = nil,
         redirectURL: URL,
         scopes: [String] = AppAuthAuthorizer.defaultScopes,
         urlSession: URLSession = .shared
     ) {
         self.clientID = clientID
+        self.clientSecret = clientSecret
         self.redirectURL = redirectURL
         self.scopes = scopes
         self.urlSession = urlSession
@@ -43,7 +46,7 @@ final class AppAuthAuthorizer: AuthorizationPerforming, @unchecked Sendable {
         let request = OIDAuthorizationRequest(
             configuration: configuration,
             clientId: clientID,
-            clientSecret: nil,
+            clientSecret: clientSecret,
             scopes: scopes,
             redirectURL: redirectURL,
             responseType: OIDResponseTypeCode,
@@ -63,7 +66,7 @@ final class AppAuthAuthorizer: AuthorizationPerforming, @unchecked Sendable {
             authorizationCode: nil,
             redirectURL: redirectURL,
             clientID: clientID,
-            clientSecret: nil,
+            clientSecret: clientSecret,
             scope: nil,
             refreshToken: refreshToken,
             codeVerifier: nil,

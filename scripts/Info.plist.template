@@ -28,6 +28,8 @@
     <string>Copyright © 2026 pezy. MIT Licensed.</string>
     <key>OAuthClientID</key>
     <string>__OAUTH_CLIENT_ID__</string>
+    <key>OAuthClientSecret</key>
+    <string>__OAUTH_CLIENT_SECRET__</string>
     <key>OAuthRedirectURLScheme</key>
     <string>com.googleusercontent.apps.__OAUTH_REVERSED_ID__</string>
     <key>CFBundleURLTypes</key>

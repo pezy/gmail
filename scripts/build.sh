@@ -11,16 +11,23 @@ set -euo pipefail
 # `open Gmail.app`.
 
 CLIENT_ID="${OAUTH_CLIENT_ID:-}"
-if [[ -z "$CLIENT_ID" ]]; then
-    echo "ERROR: Set OAUTH_CLIENT_ID before building."
+CLIENT_SECRET="${OAUTH_CLIENT_SECRET:-}"
+if [[ -z "$CLIENT_ID" || -z "$CLIENT_SECRET" ]]; then
+    echo "ERROR: Set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET before building."
     echo
-    echo "How to get one:"
+    echo "How to get them:"
     echo "  1. Visit https://console.cloud.google.com/apis/credentials"
     echo "  2. Create OAuth 2.0 Client ID, type = Desktop app"
-    echo "  3. Copy the Client ID (looks like 123-abc.apps.googleusercontent.com)"
+    echo "  3. Copy both the Client ID and Client Secret"
     echo
     echo "Then re-run:"
-    echo "  OAUTH_CLIENT_ID=\"<your-client-id>\" ./scripts/build.sh"
+    echo "  OAUTH_CLIENT_ID=\"<id>.apps.googleusercontent.com\" \\"
+    echo "  OAUTH_CLIENT_SECRET=\"GOCSPX-...\" \\"
+    echo "  ./scripts/build.sh"
+    echo
+    echo "Note: Google treats Desktop app secrets as non-confidential, but you"
+    echo "      should still keep them out of public repos. The secret lands in"
+    echo "      Gmail.app/Contents/Info.plist (the bundle is gitignored)."
     exit 1
 fi
 
@@ -45,6 +52,7 @@ cp "$REPO_ROOT/.build/release/Gmail" "$APP/Contents/MacOS/Gmail"
 
 sed \
     -e "s|__OAUTH_CLIENT_ID__|${CLIENT_ID}|g" \
+    -e "s|__OAUTH_CLIENT_SECRET__|${CLIENT_SECRET}|g" \
     -e "s|__OAUTH_REVERSED_ID__|${REVERSED}|g" \
     "$REPO_ROOT/scripts/Info.plist.template" > "$APP/Contents/Info.plist"
 

@@ -5,6 +5,7 @@ struct PopoverView: View {
     @Bindable var appState: AppState
     let onRefresh: () -> Void
     let onSignIn: () -> Void
+    let onSignOut: () -> Void
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -154,10 +155,16 @@ struct PopoverView: View {
                     .truncationMode(.middle)
             }
             Spacer()
+            Button(action: onSignOut) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+            }
+            .buttonStyle(.plain)
+            .help("Sign out and clear cached tokens")
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.plain)
+            .help("Settings")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

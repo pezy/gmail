@@ -24,10 +24,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             presentMissingClientIDAlert()
             return
         }
+        let clientSecretRaw = Bundle.main.object(forInfoDictionaryKey: "OAuthClientSecret") as? String
+        let clientSecret = (clientSecretRaw?.isEmpty == false && clientSecretRaw != "__OAUTH_CLIENT_SECRET__")
+            ? clientSecretRaw : nil
 
         let redirectURL = URL(string: "\(scheme):/oauth2redirect")!
         let keychain = KeychainService()
-        let authorizer = AppAuthAuthorizer(clientID: clientID, redirectURL: redirectURL)
+        let authorizer = AppAuthAuthorizer(
+            clientID: clientID,
+            clientSecret: clientSecret,
+            redirectURL: redirectURL
+        )
         auth = AuthService(keychain: keychain, authorizer: authorizer)
         api = GmailAPIClient()
         notificationManager = NotificationManager(appState: appState)
@@ -47,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             appState: appState,
             onRefresh: { [weak self] in Task { await self?.coordinator.performTick() } },
             onSignIn: { [weak self] in Task { await self?.signIn() } },
+            onSignOut: { [weak self] in Task { await self?.signOut() } },
             onOpenSettings: { [weak self] in self?.openSettings() }
         )
         statusBar = StatusBarController(appState: appState, popoverContent: popoverContent)
@@ -88,10 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func signIn() async {
         do {
             _ = try await auth.signIn()
-            if let email = auth.session?.email {
-                appState.authState = .signedIn(email: email)
-            }
+            appState.lastError = nil
             await coordinator.start()
+            // 立即 fetch 一次, 否则要等 60s 才会拉到 profile + 真正进入 signedIn 状态
+            await coordinator.performTick()
         } catch let error as AppError {
             appState.lastError = error
         } catch {
@@ -102,6 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func signOut() async {
         try? await auth.signOut()
         await coordinator.stop()
+        UserDefaults.standard.removeObject(forKey: "lastHistoryId")
+        UserDefaults.standard.removeObject(forKey: "lastFetchTime")
         appState.reset()
     }
 
