@@ -7,6 +7,7 @@ struct PopoverView: View {
     let onSignIn: () -> Void
     let onSignOut: () -> Void
     let onOpenSettings: () -> Void
+    let onQuit: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -165,6 +166,11 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .help("Settings")
+            Button(action: onQuit) {
+                Image(systemName: "power")
+            }
+            .buttonStyle(.plain)
+            .help("Quit Gmail (\u{2318}Q)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

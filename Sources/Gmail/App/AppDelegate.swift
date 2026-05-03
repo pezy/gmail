@@ -55,10 +55,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             onRefresh: { [weak self] in Task { await self?.coordinator.performTick() } },
             onSignIn: { [weak self] in Task { await self?.signIn() } },
             onSignOut: { [weak self] in Task { await self?.signOut() } },
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            onOpenSettings: { [weak self] in self?.openSettings() },
+            onQuit: { NSApp.terminate(nil) }
         )
         statusBar = StatusBarController(appState: appState, popoverContent: popoverContent)
         statusBar.attachPolling(coordinator)
+        statusBar.attachContextMenu(
+            onOpenSettings: { [weak self] in self?.openSettings() },
+            onQuit: { NSApp.terminate(nil) }
+        )
         statusBar.startObserving()
 
         networkMonitor = NetworkMonitor()

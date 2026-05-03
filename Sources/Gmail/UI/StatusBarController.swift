@@ -10,6 +10,8 @@ final class StatusBarController {
     private let appState: AppState
     private var observationTask: Task<Void, Never>?
     private weak var pollingCoordinator: PollingCoordinator?
+    private var onOpenSettings: (() -> Void)?
+    private var onQuit: (() -> Void)?
 
     init(appState: AppState, popoverContent: some View) {
         self.appState = appState
@@ -24,6 +26,11 @@ final class StatusBarController {
 
     func attachPolling(_ coordinator: PollingCoordinator) {
         self.pollingCoordinator = coordinator
+    }
+
+    func attachContextMenu(onOpenSettings: @escaping () -> Void, onQuit: @escaping () -> Void) {
+        self.onOpenSettings = onOpenSettings
+        self.onQuit = onQuit
     }
 
     func startObserving() {
@@ -74,10 +81,22 @@ final class StatusBarController {
     private func configureButton() {
         guard let button = statusItem.button else { return }
         button.target = self
-        button.action = #selector(togglePopover)
+        button.action = #selector(handleClick)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     @objc
+    private func handleClick() {
+        let event = NSApp.currentEvent
+        let isRightClick = event?.type == .rightMouseUp ||
+            (event?.type == .leftMouseUp && event?.modifierFlags.contains(.control) == true)
+        if isRightClick {
+            showContextMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
     private func togglePopover() {
         if popover.isShown {
             popover.performClose(nil)
@@ -87,4 +106,45 @@ final class StatusBarController {
             Task { await pollingCoordinator?.popoverOpened() }
         }
     }
+
+    private func showContextMenu() {
+        guard let button = statusItem.button else { return }
+        let menu = NSMenu()
+
+        let openItem = NSMenuItem(
+            title: popover.isShown ? "Hide Gmail" : "Open Gmail",
+            action: #selector(togglePopoverAction),
+            keyEquivalent: ""
+        )
+        openItem.target = self
+        menu.addItem(openItem)
+
+        menu.addItem(.separator())
+
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettingsAction),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(
+            title: "Quit Gmail",
+            action: #selector(quitAction),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+        button.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func togglePopoverAction() { togglePopover() }
+    @objc private func openSettingsAction() { onOpenSettings?() }
+    @objc private func quitAction() { onQuit?() }
 }
