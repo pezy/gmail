@@ -102,8 +102,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         do {
             _ = try await auth.signIn()
             appState.lastError = nil
+            // Fresh sign-in: clear any stale history pointers from a previous account
+            // (e.g. user upgraded the binary or signed in to a different account).
+            // PollingCoordinator.fetchInitial is the only path that calls attachEmail
+            // and transitions authState to .signedIn — keeping a leftover lastHistoryId
+            // would force fetchIncremental and leave authState stuck at .signedOut.
+            UserDefaults.standard.removeObject(forKey: "lastHistoryId")
+            UserDefaults.standard.removeObject(forKey: "lastFetchTime")
             await coordinator.start()
-            // 立即 fetch 一次, 否则要等 60s 才会拉到 profile + 真正进入 signedIn 状态
+            // Immediate fetch so the user sees mail within seconds rather than waiting 60s.
             await coordinator.performTick()
         } catch let error as AppError {
             appState.lastError = error

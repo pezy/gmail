@@ -112,6 +112,23 @@ final class PollingCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.lastHistoryId, "100")
     }
 
+    /// Regression: a stale lastHistoryId from a previous binary or account would
+    /// route a fresh sign-in down fetchIncremental, bypassing attachEmail and
+    /// leaving authState stuck at .signedOut. Coordinator must recover.
+    func testStaleHistoryIdWithoutEmailFallsBackToFetchInitial() async throws {
+        try await signInTestSession()  // session has email == nil (just-signed-in)
+        coordinator.lastHistoryId = "100"  // stale from previous run
+
+        api.profileResult = .success(makeProfile(emailAddress: "alice@example.com", historyId: "200"))
+        api.listResult = .success(MessageListResponse(messageIds: [], resultSizeEstimate: 0))
+
+        await coordinator.performTick()
+
+        XCTAssertEqual(api.profileCallCount, 1, "Must call getProfile to learn email")
+        XCTAssertEqual(appState.authState, .signedIn(email: "alice@example.com"))
+        XCTAssertEqual(coordinator.lastHistoryId, "200", "Should adopt fresh historyId from profile")
+    }
+
     func testFetchIncrementalRemovesMessagesOnLabelsRemoved() async throws {
         try await signInTestSession()
         coordinator.lastHistoryId = "100"

@@ -168,6 +168,15 @@ final class PollingCoordinator {
     }
 
     private func fetchIncremental(token: String, since historyId: String) async throws {
+        // Defense-in-depth: if we somehow got here without an email on the session
+        // (e.g., a stale historyId from a previous binary version), fall back to the
+        // initial path so attachEmail runs and authState transitions to .signedIn.
+        if auth.session?.email == nil {
+            lastHistoryId = nil
+            try await fetchInitial(token: token)
+            return
+        }
+
         let response: HistoryResponse
         do {
             response = try await api.listHistory(accessToken: token, startHistoryId: historyId)
