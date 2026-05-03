@@ -20,6 +20,12 @@ final class AppAuthAuthorizer: AuthorizationPerforming, @unchecked Sendable {
 
     private let configurationCache = ConfigurationCache()
 
+    /// Holds the in-flight ASWebAuthenticationSession-backed flow so its
+    /// callback target stays alive. OIDExternalUserAgentMac holds the
+    /// session as `__weak`; without retaining here the OAuth redirect
+    /// becomes a no-op even though Safari completes the flow.
+    nonisolated(unsafe) private var currentAuthorizationFlow: OIDExternalUserAgentSession?
+
     init(
         clientID: String,
         redirectURL: URL,
@@ -106,10 +112,11 @@ final class AppAuthAuthorizer: AuthorizationPerforming, @unchecked Sendable {
         try await withCheckedThrowingContinuation { continuation in
             let presentingWindow = NSApp.windows.first ?? NSWindow()
             let userAgent = OIDExternalUserAgentMac(presenting: presentingWindow)
-            _ = OIDAuthState.authState(
+            self.currentAuthorizationFlow = OIDAuthState.authState(
                 byPresenting: request,
                 externalUserAgent: userAgent
-            ) { authState, error in
+            ) { [weak self] authState, error in
+                self?.currentAuthorizationFlow = nil
                 if let error {
                     continuation.resume(throwing: error)
                     return
