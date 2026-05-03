@@ -6,6 +6,8 @@ final class AuthServiceTests: XCTestCase {
     private var keychain: KeychainService!
     private var authorizer: MockAuthorizer!
     private var clock: TestClock!
+    private var defaults: UserDefaults!
+    private var defaultsSuiteName: String!
     private var service: AuthService!
 
     override func setUp() async throws {
@@ -13,10 +15,13 @@ final class AuthServiceTests: XCTestCase {
         keychain = KeychainService(service: "com.pezy.gmail.tests.\(UUID().uuidString)")
         authorizer = MockAuthorizer()
         clock = TestClock(initial: Date(timeIntervalSince1970: 1_700_000_000))
+        defaultsSuiteName = "auth.tests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: defaultsSuiteName)!
         let clockRef = clock!
         service = AuthService(
             keychain: keychain,
             authorizer: authorizer,
+            userDefaults: defaults,
             now: { clockRef.now() }
         )
     }
@@ -24,6 +29,7 @@ final class AuthServiceTests: XCTestCase {
     override func tearDown() async throws {
         try? keychain.delete(account: KeychainService.pendingAccount)
         try? keychain.delete(account: "alice@example.com")
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
         try await super.tearDown()
     }
 
@@ -115,7 +121,7 @@ final class AuthServiceTests: XCTestCase {
     func testRestoreLoadsPendingSession() async throws {
         authorizer.initialResult = .success(makeSession(access: "a1", expiresIn: 3600))
         _ = try await service.signIn()
-        let fresh = AuthService(keychain: keychain, authorizer: authorizer)
+        let fresh = AuthService(keychain: keychain, authorizer: authorizer, userDefaults: defaults)
 
         let restored = try fresh.restore()
 
@@ -127,11 +133,57 @@ final class AuthServiceTests: XCTestCase {
         authorizer.initialResult = .success(makeSession(access: "a1", expiresIn: 3600))
         _ = try await service.signIn()
         try service.attachEmail("alice@example.com")
-        let fresh = AuthService(keychain: keychain, authorizer: authorizer)
+        let fresh = AuthService(keychain: keychain, authorizer: authorizer, userDefaults: defaults)
 
         let restored = try fresh.restore(email: "alice@example.com")
 
         XCTAssertEqual(restored?.email, "alice@example.com")
+    }
+
+    /// Regression: quitting after a complete sign-in (signIn + attachEmail) used
+    /// to leave restore() returning nil because attachEmail moved the entry off
+    /// `__pending__`. The fix persists the email in UserDefaults so restore()
+    /// (no-args) can find the migrated entry on relaunch.
+    func testRestoreFindsMigratedSessionAcrossRelaunch() async throws {
+        authorizer.initialResult = .success(makeSession(access: "a1", expiresIn: 3600))
+        _ = try await service.signIn()
+        try service.attachEmail("alice@example.com")
+
+        // Simulate app quit + relaunch — fresh AuthService, same Keychain + UserDefaults.
+        let fresh = AuthService(keychain: keychain, authorizer: authorizer, userDefaults: defaults)
+
+        let restored = try fresh.restore()
+
+        XCTAssertNotNil(restored, "restore() must find the migrated session via lastEmailDefaultsKey")
+        XCTAssertEqual(restored?.accessToken, "a1")
+        XCTAssertEqual(restored?.email, "alice@example.com")
+    }
+
+    func testSignOutClearsLastEmailKey() async throws {
+        authorizer.initialResult = .success(makeSession(access: "a1", expiresIn: 3600))
+        _ = try await service.signIn()
+        try service.attachEmail("alice@example.com")
+
+        try await service.signOut()
+
+        XCTAssertNil(defaults.string(forKey: AuthService.lastEmailDefaultsKey))
+    }
+
+    func testRefreshFailureClearsLastEmailKey() async throws {
+        authorizer.initialResult = .success(makeSession(access: "a1", expiresIn: 30))
+        _ = try await service.signIn()
+        try service.attachEmail("alice@example.com")
+        clock.advance(120)
+        authorizer.refreshResult = .failure(NSError(domain: "test", code: 401))
+
+        do {
+            _ = try await service.freshAccessToken()
+            XCTFail("expected refresh to fail")
+        } catch AppError.auth(.refreshTokenInvalid) {
+            XCTAssertNil(defaults.string(forKey: AuthService.lastEmailDefaultsKey))
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
     }
 
     func testFreshAccessTokenFailsWhenNotSignedIn() async {

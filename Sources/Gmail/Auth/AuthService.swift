@@ -2,23 +2,41 @@ import Foundation
 
 @MainActor
 final class AuthService {
+    static let lastEmailDefaultsKey = "auth.lastSignedInEmail"
+
     private let keychain: KeychainService
     private let authorizer: AuthorizationPerforming
+    private let userDefaults: UserDefaults
     private let now: @Sendable () -> Date
     private(set) var session: AuthSession?
 
     init(
         keychain: KeychainService,
         authorizer: AuthorizationPerforming,
+        userDefaults: UserDefaults = .standard,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.keychain = keychain
         self.authorizer = authorizer
+        self.userDefaults = userDefaults
         self.now = now
     }
 
+    /// Restores the most recent session from Keychain.
+    ///
+    /// Resolution order:
+    /// 1. Last-known email (from UserDefaults), if set — covers the normal case
+    ///    where `attachEmail` migrated the entry off `__pending__`.
+    /// 2. The `__pending__` account — covers the edge case where the previous
+    ///    run signed in but quit before the profile fetch finished.
     @discardableResult
     func restore() throws -> AuthSession? {
+        if let lastEmail = userDefaults.string(forKey: Self.lastEmailDefaultsKey),
+           !lastEmail.isEmpty,
+           let session = try loadSession(account: lastEmail) {
+            self.session = session
+            return session
+        }
         if let session = try loadSession(account: KeychainService.pendingAccount) {
             self.session = session
             return session
@@ -52,6 +70,7 @@ final class AuthService {
             to: email
         )
         try persist(updated, account: email)
+        userDefaults.set(email, forKey: Self.lastEmailDefaultsKey)
         self.session = updated
     }
 
@@ -73,6 +92,7 @@ final class AuthService {
             // Best-effort; clear local state regardless.
         }
         try keychain.delete(account: accountKey(for: current))
+        userDefaults.removeObject(forKey: Self.lastEmailDefaultsKey)
         self.session = nil
     }
 
@@ -96,6 +116,7 @@ final class AuthService {
         } catch {
             self.session = nil
             try? keychain.delete(account: accountKey(for: current))
+            userDefaults.removeObject(forKey: Self.lastEmailDefaultsKey)
             throw AppError.auth(.refreshTokenInvalid)
         }
     }
