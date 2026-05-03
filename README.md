@@ -1,78 +1,140 @@
-# Gmail — macOS 菜单栏 Gmail 通知
+<h4 align="right">English | <strong><a href="README_zh.md">简体中文</a></strong></h4>
 
-> **🚧 v1.0.0-beta** — 仅源码构建。需要自建 Google Cloud OAuth 凭据。`.dmg` 二进制分发待 OAuth verification 通过后开放。
+<p align="center">
+  <img src="https://img.shields.io/badge/-Gmail-EA4335?logo=gmail&logoColor=white&style=for-the-badge" width="138" />
+  <h1 align="center">Gmail</h1>
+  <div align="center">
+    <a href="https://github.com/pezy/gmail/releases" target="_blank">
+      <img alt="Status" src="https://img.shields.io/badge/status-beta-orange?style=flat-square"></a>
+    <a href="LICENSE" target="_blank">
+      <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+    <img alt="Swift 6.0+" src="https://img.shields.io/badge/Swift-6.0%2B-F05138?style=flat-square&logo=swift&logoColor=white">
+    <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-orange?style=flat-square">
+  </div>
+  <div align="center">A minimalist Gmail menu bar app for macOS. Native notifications, nothing else.</div>
+</p>
 
-一个住在菜单栏的极简 Gmail 通知应用。新邮件来了你知道，想看就看，想回复跳到网页版。Swift + SwiftUI 原生开发。
+## Why
 
-## 特性 (v1)
+There is no good open-source Gmail client for macOS. The web client lacks native notifications and a Dock badge. Mimestream is paid and closed. Mail.app does not feel like Gmail. Electron clients are heavy.
 
-- 菜单栏图标 + 未读邮件计数 (✉ N)
-- 新邮件到达 → macOS 原生通知 (含发件人 + 主题)
-- 点击通知 / 邮件行 → 默认浏览器打开 Gmail 网页版的对应邮件
-- popover 显示最近 20 条未读邮件 (380×480pt)
-- 增量轮询 (history.list), 稳态 ~1-3 quota units/poll
-- 错误状态视觉反馈 (auth ⚠️ 黄 / 网络断开 灰 / API 错误 ⚠️ 红, 优先级递减)
-- 全局快捷键唤出 popover (Settings 中可配置, 默认不绑定避免冲突)
-- 开机自启 (SMAppService, Settings 中可开关)
-- 4 种空态 (未登录 / 需重新授权 / Inbox Zero / 错误)
+This app does one thing: tells you when new mail arrives. Click the notification to open the message in your browser. That is it.
 
-## 系统要求
+## Features
 
-- macOS 14 (Sonoma) 或更新
-- Xcode 15+ / Swift 6.0+ (`xcode-select --install` 即可)
+- **Menu bar only** — `LSUIElement=true`, no Dock icon, no main window
+- **Native notifications** — UNUserNotificationCenter, click to open in browser
+- **Incremental polling** — `users.history.list` keeps steady-state at ~1-3 quota units per poll
+- **Status-aware icon** — auth ⚠️ yellow, network grey, API ⚠️ red, normal black (priority resolved)
+- **Quad empty states** — signed-out, needs reauthorization, inbox zero, error with retry
+- **Configurable polling** — 60s default, 120s / 5min / 10min via Settings
+- **Launch at login** — SMAppService toggle in Settings
+- **Multi-account-safe URLs** — notification clicks open the right inbox even with multiple Google sessions
 
-## 构建
+## System Requirements
 
-### 1. 创建 Google Cloud OAuth 凭据
+- macOS 14 (Sonoma) or newer
+- Xcode 15+ (`xcode-select --install`)
+- A Google Cloud OAuth 2.0 Client ID (Desktop app type)
 
-1. 访问 [Google Cloud Console - Credentials](https://console.cloud.google.com/apis/credentials)
-2. 选择 / 创建一个 Google Cloud Project
-3. 启用 Gmail API: APIs & Services → Library → Gmail API → Enable
-4. OAuth consent screen → 配置基本信息 → User Type 选 External, Publishing status 暂时为 "Testing"
-5. Credentials → Create Credentials → OAuth client ID → Application type = **Desktop app**
-6. 复制 Client ID, 形如 `123456789-abcdef.apps.googleusercontent.com`
+## Installation
 
-> **⚠️ Testing 状态限制**
-> Google OAuth Testing 状态下:
-> - 仅添加到 OAuth consent screen "Test users" 的 Google 账号可登录
-> - refresh_token 7 天后失效, 用户需重新授权
+> ⚠️ **v1.0.0-beta** — source build only. The `.dmg` and Homebrew cask will follow once Google OAuth verification clears.
+
+### 1. Create Google Cloud OAuth credentials
+
+1. Open the [Google Cloud Console — Credentials page](https://console.cloud.google.com/apis/credentials).
+2. Pick an existing project or create a new one.
+3. Enable Gmail API: **APIs & Services → Library → Gmail API → Enable**.
+4. Configure the OAuth consent screen (User Type = External, Publishing status = Testing).
+5. **Create Credentials → OAuth client ID → Application type = Desktop app**.
+6. Copy both the **Client ID** (`123-abc.apps.googleusercontent.com`) and **Client Secret** (`GOCSPX-...`).
+
+> **Testing-status caveats** (Google rules, not ours):
 >
-> 这是 Google 的限制不是本应用 bug。可通过 OAuth verification 进入 Production 状态消除限制 (审核约 4-6 周)。
+> - Only Google accounts added to the consent screen's *Test users* list can sign in.
+> - Refresh tokens expire after 7 days. The app will prompt you to sign in again.
+>
+> Submit OAuth verification (privacy policy URL required, ~4 weeks) to remove these limits.
 
-### 2. 构建 .app
+### 2. Build
 
 ```bash
 git clone https://github.com/pezy/gmail.git
 cd gmail
-OAUTH_CLIENT_ID="123456789-abcdef.apps.googleusercontent.com" ./scripts/build.sh
+OAUTH_CLIENT_ID="123-abc.apps.googleusercontent.com" \
+OAUTH_CLIENT_SECRET="GOCSPX-..." \
+./scripts/build.sh
 ```
 
-构建输出: `./Gmail.app`
+The script writes `Gmail.app` to the repo root.
 
-### 3. 运行
+### 3. Run
 
 ```bash
+xattr -d com.apple.quarantine Gmail.app  # bypass Gatekeeper for unsigned binary
 open Gmail.app
 ```
 
-首次运行 macOS Gatekeeper 会拦截 (二进制未签名)。两种处理方式:
-- 在 Finder 中右键 → Open, 在弹窗中点 Open 一次即可
-- 或命令行: `xattr -d com.apple.quarantine Gmail.app && open Gmail.app`
+The menu bar shows ✉. Click → **Connect Gmail** → finish the OAuth flow in Safari → unread mail appears within seconds.
 
-应用启动后菜单栏出现 ✉ 图标。点击 → 弹出 popover → "Connect Gmail" 触发 Google 授权窗口。
+## Usage
 
-## 测试
+- **Click ✉ in the menu bar** to toggle the popover.
+- **Click a row** to open the message in your default browser.
+- **⚙ icon** in the popover footer opens Settings.
+- **Sign-out icon** in the footer clears tokens and resets state. Use this if anything ever feels stuck.
+
+## Tests
 
 ```bash
 swift test
 ```
 
-包含 67+ 单元测试覆盖 OAuth 状态机、Keychain、Gmail API 解析、轮询状态机、通知去重、UI presenter 等。
+67 unit tests covering OAuth state machine, Keychain round-trip, Gmail API parsing, polling state machine, notification dedup, status bar presenter, and settings persistence.
 
-## 设计文档
+## Roadmap
 
-完整设计文档与决策记录在 `~/.gstack/projects/pezy-gmail/ceo-plans/20260503-gmail-menubar.md`。
+See [TODOS.md](TODOS.md) for deferred work, including:
 
-## 许可
+- Multi-account support
+- Quick Look message preview (spacebar)
+- `.dmg` distribution + Homebrew cask
+- Sparkle auto-update
+- Mac App Store distribution
 
-MIT
+## Tech Stack
+
+- **Language**: Swift 6 (strict concurrency)
+- **UI**: SwiftUI + AppKit (`NSStatusItem`, `NSPopover`, `NSPanel`, `NSWindow`)
+- **OAuth**: [AppAuth-iOS](https://github.com/openid/AppAuth-iOS) (the only third-party dependency)
+- **Networking**: `URLSession`
+- **Notifications**: `UNUserNotificationCenter`
+- **Token storage**: Security framework (Keychain), `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`
+- **Auto-start**: `SMAppService`
+- **Polling**: `NSBackgroundActivityScheduler`
+- **Network monitoring**: `NWPathMonitor`
+
+## Architecture
+
+Ten focused modules behind a single `@MainActor @Observable AppState`:
+
+```
+AuthService -- AppAuthAuthorizer -- KeychainService
+GmailAPIClient -- HTTPS to gmail.googleapis.com
+PollingCoordinator (state machine) -- NetworkMonitor
+NotificationManager (UNUserNotificationCenter)
+StatusBarController + PopoverView + SettingsView (UI)
+LoginItemsManager (SMAppService)
+```
+
+See [the design document](https://github.com/pezy/gmail/blob/main/CLAUDE.md) for the full architecture diagram and decision log.
+
+## Acknowledgements
+
+- [AppAuth-iOS](https://github.com/openid/AppAuth-iOS) by Google for handling OAuth correctly so we did not have to.
+- [MiaoYan](https://github.com/tw93/MiaoYan) for the README format inspiration.
+
+## License
+
+[MIT](LICENSE)
