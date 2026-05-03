@@ -28,4 +28,8 @@ protocol GmailAPIClienting: Sendable {
     func listUnreadMessages(accessToken: String, maxResults: Int) async throws -> MessageListResponse
     func getMessageMetadata(accessToken: String, id: String) async throws -> EmailMessage
     func listHistory(accessToken: String, startHistoryId: String) async throws -> HistoryResponse
+    /// Returns the authoritative unread count for the INBOX label.
+    /// Costs 1 quota unit. The list endpoints' resultSizeEstimate caps at maxResults
+    /// across responses, so we never rely on it for the visible total.
+    func getInboxUnreadCount(accessToken: String) async throws -> Int
 }

@@ -97,6 +97,36 @@ final class GmailAPIClientTests: XCTestCase {
         XCTAssertEqual(message.snippet, "hi there")
     }
 
+    func testGetInboxUnreadCountReturnsMessagesUnread() async throws {
+        MockURLProtocol.setHandler { request in
+            XCTAssertTrue(
+                request.url?.path.hasSuffix("/labels/INBOX") ?? false,
+                "Should hit labels/INBOX endpoint"
+            )
+            let body = """
+            {"id":"INBOX","name":"INBOX","messagesTotal":5000,"messagesUnread":237,"threadsUnread":120}
+            """.data(using: .utf8)!
+            return (Self.ok(), body)
+        }
+
+        let count = try await client.getInboxUnreadCount(accessToken: "tok")
+
+        XCTAssertEqual(count, 237)
+    }
+
+    func testGetInboxUnreadCountReturnsZeroWhenFieldMissing() async throws {
+        MockURLProtocol.setHandler { _ in
+            let body = """
+            {"id":"INBOX","name":"INBOX"}
+            """.data(using: .utf8)!
+            return (Self.ok(), body)
+        }
+
+        let count = try await client.getInboxUnreadCount(accessToken: "tok")
+
+        XCTAssertEqual(count, 0)
+    }
+
     func testListHistoryParsesAllChangeTypes() async throws {
         MockURLProtocol.setHandler { _ in
             let body = """

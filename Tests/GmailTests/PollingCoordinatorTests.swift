@@ -102,13 +102,15 @@ final class PollingCoordinatorTests: XCTestCase {
         api.profileResult = .success(makeProfile(emailAddress: "alice@example.com", historyId: "100"))
         api.listResult = .success(MessageListResponse(messageIds: ["m1"], resultSizeEstimate: 1))
         api.getResults["m1"] = .success(makeEmail(id: "m1", subject: "Hi"))
+        api.inboxUnreadCountResult = .success(200)  // authoritative INBOX count
 
         await coordinator.performTick()
 
         XCTAssertEqual(appState.authState, .signedIn(email: "alice@example.com"))
         XCTAssertEqual(appState.emails.count, 1)
         XCTAssertEqual(appState.emails.first?.subject, "Hi")
-        XCTAssertEqual(appState.unreadCount, 1)
+        XCTAssertEqual(appState.unreadCount, 200,
+                       "unreadCount must come from labels.get(INBOX), not from the visible list count")
         XCTAssertEqual(coordinator.lastHistoryId, "100")
     }
 
@@ -137,18 +139,45 @@ final class PollingCoordinatorTests: XCTestCase {
             makeEmail(id: "m1", subject: "old1"),
             makeEmail(id: "m2", subject: "old2")
         ]
-        appState.unreadCount = 2
+        appState.unreadCount = 199
 
         api.historyResult = .success(HistoryResponse(
             historyId: "200",
             changes: [.labelRemoved(messageId: "m1", label: "UNREAD")]
         ))
+        api.inboxUnreadCountResult = .success(198)  // one fewer after the label removal
 
         await coordinator.performTick()
 
         XCTAssertEqual(appState.emails.map(\.id), ["m2"])
-        XCTAssertEqual(appState.unreadCount, 1)
+        XCTAssertEqual(appState.unreadCount, 198,
+                       "unreadCount must reflect labels.get(INBOX), not the visible list size")
         XCTAssertEqual(coordinator.lastHistoryId, "200")
+    }
+
+    /// Regression: incremental polling used to set unreadCount = emails.count, which
+    /// caps at maxResults (20). User saw "200 unread" jump to "20" after the first
+    /// 60s tick. The fix routes unreadCount through labels.get(INBOX).messagesUnread.
+    func testIncrementalPollingDoesNotCollapseUnreadCountToVisibleListCap() async throws {
+        try await signInTestSession()
+        coordinator.lastHistoryId = "100"
+        try auth.attachEmail("alice@example.com")
+        // Visible list capped at 20, but real INBOX has 200 unread.
+        appState.emails = (0..<20).map { makeEmail(id: "m\($0)", subject: "old\($0)") }
+        appState.unreadCount = 200
+
+        api.historyResult = .success(HistoryResponse(
+            historyId: "200",
+            changes: [.messageAdded(id: "new1")]
+        ))
+        api.getResults["new1"] = .success(makeEmail(id: "new1", subject: "fresh"))
+        api.inboxUnreadCountResult = .success(201)  // 200 + 1 newly added
+
+        await coordinator.performTick()
+
+        XCTAssertEqual(appState.unreadCount, 201,
+                       "Must NOT collapse to emails.count (~20) — that was the bug")
+        XCTAssertGreaterThanOrEqual(appState.emails.count, 20)
     }
 
     func testFetchIncrementalAddsNewMessageAndNotifies() async throws {
@@ -233,8 +262,10 @@ private final class MockAPI: GmailAPIClienting, @unchecked Sendable {
     var listResult: Result<MessageListResponse, Error> = .failure(NSError(domain: "mock", code: 0))
     var historyResult: Result<HistoryResponse, Error> = .failure(NSError(domain: "mock", code: 0))
     var getResults: [String: Result<EmailMessage, Error>] = [:]
+    var inboxUnreadCountResult: Result<Int, Error> = .success(0)
     var profileCallCount = 0
     var historyCallCount = 0
+    var inboxUnreadCallCount = 0
 
     func getProfile(accessToken: String) async throws -> GmailProfile {
         profileCallCount += 1
@@ -255,6 +286,11 @@ private final class MockAPI: GmailAPIClienting, @unchecked Sendable {
     func listHistory(accessToken: String, startHistoryId: String) async throws -> HistoryResponse {
         historyCallCount += 1
         return try historyResult.get()
+    }
+
+    func getInboxUnreadCount(accessToken: String) async throws -> Int {
+        inboxUnreadCallCount += 1
+        return try inboxUnreadCountResult.get()
     }
 }
 

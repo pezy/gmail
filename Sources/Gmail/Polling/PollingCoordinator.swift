@@ -163,7 +163,10 @@ final class PollingCoordinator {
             }
         }
         appState.emails = messages.sorted { $0.internalDate > $1.internalDate }
-        appState.unreadCount = list.resultSizeEstimate
+        // labels.get(INBOX).messagesUnread is the authoritative total. resultSizeEstimate
+        // from messages.list is bounded by maxResults across responses, so it caps at 20.
+        appState.unreadCount = (try? await api.getInboxUnreadCount(accessToken: token))
+            ?? list.resultSizeEstimate
         lastHistoryId = profile.historyId
     }
 
@@ -224,7 +227,14 @@ final class PollingCoordinator {
         if !removedIds.isEmpty {
             appState.emails.removeAll { removedIds.contains($0.id) }
         }
-        appState.unreadCount = appState.emails.count
+        // Re-query the authoritative INBOX unread count whenever the inbox changed.
+        // Falls back to the previous in-memory count if the call fails — better stale
+        // than wrong (collapsing to emails.count would clamp to the visible cap of 20).
+        if !addedIds.isEmpty || !removedIds.isEmpty {
+            if let count = try? await api.getInboxUnreadCount(accessToken: token) {
+                appState.unreadCount = count
+            }
+        }
         lastHistoryId = response.historyId
     }
 

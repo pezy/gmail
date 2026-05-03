@@ -106,6 +106,12 @@ final class GmailAPIClient: GmailAPIClienting, @unchecked Sendable {
         return HistoryResponse(historyId: historyId, changes: changes)
     }
 
+    func getInboxUnreadCount(accessToken: String) async throws -> Int {
+        let request = makeRequest(path: "labels/INBOX", queryItems: [], accessToken: accessToken)
+        let json = try await sendJSON(request)
+        return (json["messagesUnread"] as? Int) ?? 0
+    }
+
     private func makeRequest(
         path: String,
         queryItems: [URLQueryItem],
