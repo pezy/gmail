@@ -155,6 +155,32 @@ final class PollingCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.lastHistoryId, "200")
     }
 
+    /// Regression: history.list?labelId=INBOX excluded deleted messages (they no longer carry
+    /// INBOX when the query runs). Coordinator never saw the deletion, count stayed stale.
+    /// Fix: drop the server-side labelId filter and use the labelIds embedded in each record.
+    func testFetchIncrementalHandlesMessageDeleted() async throws {
+        try await signInTestSession()
+        coordinator.lastHistoryId = "100"
+        try auth.attachEmail("alice@example.com")
+        appState.emails = [
+            makeEmail(id: "m1", subject: "to delete"),
+            makeEmail(id: "m2", subject: "keep")
+        ]
+        appState.unreadCount = 5
+
+        api.historyResult = .success(HistoryResponse(
+            historyId: "200",
+            changes: [.messageDeleted(id: "m1", labelIds: ["INBOX", "UNREAD"])]
+        ))
+        api.inboxUnreadCountResult = .success(4)
+
+        await coordinator.performTick()
+
+        XCTAssertEqual(appState.emails.map(\.id), ["m2"], "deleted message must leave the list")
+        XCTAssertEqual(appState.unreadCount, 4, "count must refresh after deletion")
+        XCTAssertEqual(coordinator.lastHistoryId, "200")
+    }
+
     /// Regression: incremental polling used to set unreadCount = emails.count, which
     /// caps at maxResults (20). User saw "200 unread" jump to "20" after the first
     /// 60s tick. The fix routes unreadCount through labels.get(INBOX).messagesUnread.
@@ -168,7 +194,7 @@ final class PollingCoordinatorTests: XCTestCase {
 
         api.historyResult = .success(HistoryResponse(
             historyId: "200",
-            changes: [.messageAdded(id: "new1")]
+            changes: [.messageAdded(id: "new1", labelIds: ["INBOX", "UNREAD"])]
         ))
         api.getResults["new1"] = .success(makeEmail(id: "new1", subject: "fresh"))
         api.inboxUnreadCountResult = .success(201)  // 200 + 1 newly added
@@ -187,7 +213,7 @@ final class PollingCoordinatorTests: XCTestCase {
 
         api.historyResult = .success(HistoryResponse(
             historyId: "200",
-            changes: [.messageAdded(id: "m1")]
+            changes: [.messageAdded(id: "m1", labelIds: ["INBOX", "UNREAD"])]
         ))
         api.getResults["m1"] = .success(makeEmail(id: "m1", subject: "Fresh"))
 

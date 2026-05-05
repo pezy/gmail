@@ -59,11 +59,13 @@ final class GmailAPIClient: GmailAPIClienting, @unchecked Sendable {
     }
 
     func listHistory(accessToken: String, startHistoryId: String) async throws -> HistoryResponse {
+        // No labelId filter here: Gmail filters by the message's *current* labels, so deleted/
+        // archived messages (which no longer carry INBOX) would be excluded. We filter inbox-
+        // relevant events client-side using the labelIds embedded in each history record.
         let request = makeRequest(
             path: "history",
             queryItems: [
-                URLQueryItem(name: "startHistoryId", value: startHistoryId),
-                URLQueryItem(name: "labelId", value: "INBOX")
+                URLQueryItem(name: "startHistoryId", value: startHistoryId)
             ],
             accessToken: accessToken
         )
@@ -77,13 +79,15 @@ final class GmailAPIClient: GmailAPIClienting, @unchecked Sendable {
             for added in (record["messagesAdded"] as? [[String: Any]]) ?? [] {
                 if let message = added["message"] as? [String: Any],
                    let id = message["id"] as? String {
-                    changes.append(.messageAdded(id: id))
+                    let labelIds = message["labelIds"] as? [String] ?? []
+                    changes.append(.messageAdded(id: id, labelIds: labelIds))
                 }
             }
             for deleted in (record["messagesDeleted"] as? [[String: Any]]) ?? [] {
                 if let message = deleted["message"] as? [String: Any],
                    let id = message["id"] as? String {
-                    changes.append(.messageDeleted(id: id))
+                    let labelIds = message["labelIds"] as? [String] ?? []
+                    changes.append(.messageDeleted(id: id, labelIds: labelIds))
                 }
             }
             for labelAdded in (record["labelsAdded"] as? [[String: Any]]) ?? [] {

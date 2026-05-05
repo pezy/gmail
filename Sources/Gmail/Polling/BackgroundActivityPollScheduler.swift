@@ -1,31 +1,28 @@
 import Foundation
 
+// NSBackgroundActivityScheduler is energy-efficient but macOS can defer it by
+// several minutes, which is unacceptable for a mail notifier. A Task.sleep loop
+// fires reliably and cancels instantly when invalidated.
 actor BackgroundActivityPollScheduler: PollScheduling {
-    private var activity: NSBackgroundActivityScheduler?
-    private let identifier: String
-
-    init(identifier: String = "com.pezy.gmail.polling") {
-        self.identifier = identifier
-    }
+    private var task: Task<Void, Never>?
 
     func schedule(interval: TimeInterval, action: @escaping @Sendable () async -> Void) async {
         await invalidate()
-        let activity = NSBackgroundActivityScheduler(identifier: identifier)
-        activity.interval = interval
-        activity.tolerance = max(1, interval * 0.2)
-        activity.repeats = true
-        activity.qualityOfService = .utility
-        activity.schedule { completion in
-            Task {
+        task = Task {
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(interval))
+                } catch {
+                    break
+                }
+                guard !Task.isCancelled else { break }
                 await action()
-                completion(.finished)
             }
         }
-        self.activity = activity
     }
 
     func invalidate() async {
-        activity?.invalidate()
-        activity = nil
+        task?.cancel()
+        task = nil
     }
 }

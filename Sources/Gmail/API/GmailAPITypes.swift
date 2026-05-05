@@ -17,8 +17,10 @@ struct HistoryResponse: Sendable, Equatable {
 }
 
 enum HistoryChange: Sendable, Equatable {
-    case messageAdded(id: String)
-    case messageDeleted(id: String)
+    // labelIds = the labels the message had at the time of the event (from the history record).
+    // Used to determine inbox relevance without a separate metadata fetch.
+    case messageAdded(id: String, labelIds: [String])
+    case messageDeleted(id: String, labelIds: [String])
     case labelAdded(messageId: String, label: String)
     case labelRemoved(messageId: String, label: String)
 }

@@ -96,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             appState.authState = .signedIn(email: email)
         }
         await coordinator.start()
+        await coordinator.performTick()
     }
 
     private func signIn() async {

@@ -3,7 +3,7 @@ import Observation
 import SwiftUI
 
 @MainActor
-final class StatusBarController {
+final class StatusBarController: NSObject {
     let statusItem: NSStatusItem
     let popover: NSPopover
 
@@ -21,7 +21,9 @@ final class StatusBarController {
         self.popover.behavior = .transient
         self.popover.contentViewController = NSHostingController(rootView: AnyView(popoverContent))
 
+        super.init()
         configureButton()
+        self.popover.delegate = self
     }
 
     func attachPolling(_ coordinator: PollingCoordinator) {
@@ -99,8 +101,8 @@ final class StatusBarController {
 
     private func togglePopover() {
         if popover.isShown {
+            // popoverDidClose handles state — performClose triggers it via the delegate.
             popover.performClose(nil)
-            Task { await pollingCoordinator?.popoverClosed() }
         } else if let button = statusItem.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             Task { await pollingCoordinator?.popoverOpened() }
@@ -147,4 +149,16 @@ final class StatusBarController {
     @objc private func togglePopoverAction() { togglePopover() }
     @objc private func openSettingsAction() { onOpenSettings?() }
     @objc private func quitAction() { onQuit?() }
+}
+
+extension StatusBarController: NSPopoverDelegate {
+    // .transient popovers auto-close on outside click without going through
+    // togglePopover, so we hook the delegate instead — otherwise the polling
+    // coordinator stays stuck in .paused(.popoverOpen) and background refresh
+    // never resumes.
+    nonisolated func popoverDidClose(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            await self?.pollingCoordinator?.popoverClosed()
+        }
+    }
 }

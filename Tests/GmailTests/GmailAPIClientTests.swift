@@ -134,8 +134,8 @@ final class GmailAPIClientTests: XCTestCase {
               "historyId": "1001",
               "history": [
                 {
-                  "messagesAdded": [{"message":{"id":"m1"}}],
-                  "messagesDeleted": [{"message":{"id":"m2"}}],
+                  "messagesAdded": [{"message":{"id":"m1","labelIds":["INBOX","UNREAD"]}}],
+                  "messagesDeleted": [{"message":{"id":"m2","labelIds":["INBOX"]}}],
                   "labelsAdded": [{"message":{"id":"m3"},"labelIds":["INBOX","UNREAD"]}],
                   "labelsRemoved": [{"message":{"id":"m4"},"labelIds":["UNREAD"]}]
                 }
@@ -149,8 +149,8 @@ final class GmailAPIClientTests: XCTestCase {
 
         XCTAssertEqual(response.historyId, "1001")
         XCTAssertEqual(response.changes, [
-            .messageAdded(id: "m1"),
-            .messageDeleted(id: "m2"),
+            .messageAdded(id: "m1", labelIds: ["INBOX", "UNREAD"]),
+            .messageDeleted(id: "m2", labelIds: ["INBOX"]),
             .labelAdded(messageId: "m3", label: "INBOX"),
             .labelAdded(messageId: "m3", label: "UNREAD"),
             .labelRemoved(messageId: "m4", label: "UNREAD")

@@ -80,6 +80,7 @@ final class PollingCoordinator {
         guard case .polling = state else { return }
         state = .paused(.popoverOpen)
         await scheduler.invalidate()
+        await performTick()
     }
 
     func popoverClosed() async {
@@ -194,10 +195,12 @@ final class PollingCoordinator {
         var removedIds: Set<String> = []
         for change in response.changes {
             switch change {
-            case .messageAdded(let id):
-                addedIds.append(id)
-            case .messageDeleted(let id):
-                removedIds.insert(id)
+            case .messageAdded(let id, let labelIds):
+                // Only surface messages that arrived in INBOX; ignore sent/draft/spam events.
+                if labelIds.contains("INBOX") { addedIds.append(id) }
+            case .messageDeleted(let id, let labelIds):
+                // Only react to deletions of inbox messages; harmless no-op for others.
+                if labelIds.contains("INBOX") { removedIds.insert(id) }
             case .labelAdded(let id, let label):
                 if label == "INBOX" { addedIds.append(id) }
             case .labelRemoved(let id, let label):
