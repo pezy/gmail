@@ -104,6 +104,7 @@ final class StatusBarController: NSObject {
             // popoverDidClose handles state — performClose triggers it via the delegate.
             popover.performClose(nil)
         } else if let button = statusItem.button {
+            NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             Task { await pollingCoordinator?.popoverOpened() }
         }

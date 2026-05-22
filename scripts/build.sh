@@ -50,6 +50,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$REPO_ROOT/.build/release/Gmail" "$APP/Contents/MacOS/Gmail"
 
+if [[ -f "$REPO_ROOT/scripts/AppIcon.icns" ]]; then
+    cp "$REPO_ROOT/scripts/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+fi
+
 sed \
     -e "s|__OAUTH_CLIENT_ID__|${CLIENT_ID}|g" \
     -e "s|__OAUTH_CLIENT_SECRET__|${CLIENT_SECRET}|g" \
